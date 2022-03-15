@@ -80,25 +80,94 @@ class InnerNode extends BPlusNode {
     // See BPlusNode.get.
     @Override
     public LeafNode get(DataBox key) {
-        // TODO(proj2): implement
+        int size = this.keys.size();
+        int low = 0, high = size;
+        while (low<high){
+            int mid = low + (high-low)/2;
+            if (this.keys.get(mid).compareTo(key) <= 0){
+                low = mid + 1;
+            }else{
+                high = mid;
+            }
+        }
 
-        return null;
+        return this.getChild(low).get(key);
     }
 
     // See BPlusNode.getLeftmostLeaf.
     @Override
     public LeafNode getLeftmostLeaf() {
-        assert(children.size() > 0);
-        // TODO(proj2): implement
-
-        return null;
+        assert (children.size() > 0);
+        return this.getChild(0).getLeftmostLeaf();
     }
 
     // See BPlusNode.put.
     @Override
     public Optional<Pair<DataBox, Long>> put(DataBox key, RecordId rid) {
-        // TODO(proj2): implement
+        int size = this.keys.size();
+        int low = 0, high = size;
+        while (low<high){
+            int mid = low + (high-low)/2;
+            if (this.keys.get(mid).compareTo(key) <= 0){
+                low = mid + 1;
+            }else{
+                high = mid;
+            }
+        }
 
+        Optional<Pair<DataBox, Long>> pair = this.getChild(low).put(key, rid);
+
+        if (pair.isPresent()){
+            DataBox d = pair.get().getFirst();
+            long id = pair.get().getSecond();
+
+//            int low=0,high=this.keys.size();
+            low = 0;
+            high = this.keys.size();
+            while (low < high) {
+                int mid = low + (high - low) / 2;
+                if (this.keys.get(mid).compareTo(key) < 0) {
+                    low = mid + 1;
+                } else {
+                    high = mid;
+                }
+            }
+
+            this.keys.add(low,d);
+            this.children.add(low+1,id);
+
+            if (this.metadata.getOrder()*2+1==this.keys.size()){
+                // split
+                // add new
+                DataBox newD = this.keys.get(this.metadata.getOrder());
+                List<DataBox> newKeys = new ArrayList<>();
+                List<Long> newChildren = new ArrayList<>();
+                int keySize = this.keys.size();
+                int childrenSize = this.children.size();
+                for (int i=this.metadata.getOrder()+1;i<keySize;i++){
+                    newKeys.add(this.keys.get(i));
+                }
+                for (int i=childrenSize/2;i<childrenSize;i++){
+                    newChildren.add(this.children.get(i));
+                }
+
+                // delete old
+                for (int i=keySize-1;i>=keySize/2;i--){
+                    this.keys.remove(i);
+                }
+                for (int i=childrenSize-1;i>=childrenSize/2;i--){
+                    this.children.remove(i);
+                }
+
+                InnerNode newInner = new InnerNode(this.metadata,this.bufferManager,newKeys,newChildren,this.treeContext);
+
+                this.sync();
+                Pair<DataBox, Long> newPair = new Pair<>(newD, newInner.page.getPageNum());
+                return Optional.of(newPair);
+            }
+        }
+
+        this.sync();
         return Optional.empty();
     }
 
@@ -107,15 +176,51 @@ class InnerNode extends BPlusNode {
     public Optional<Pair<DataBox, Long>> bulkLoad(Iterator<Pair<DataBox, RecordId>> data,
             float fillFactor) {
         // TODO(proj2): implement
+        Optional<Pair<DataBox, Long>> result = Optional.empty();
+        while (this.keys.size() <= this.metadata.getOrder()*2 && data.hasNext()){
+            Optional<Pair<DataBox, Long>> pair =this.getChild(this.children.size()-1).bulkLoad(data, fillFactor);
 
-        return Optional.empty();
+            if (pair.isPresent()){
+                this.keys.add(pair.get().getFirst());
+                this.children.add(pair.get().getSecond());
+            }
+        }
+
+        if (this.keys.size() == this.metadata.getOrder() * 2 + 1){
+            DataBox newD = this.keys.get(this.metadata.getOrder());
+            List<DataBox> newKeys = new ArrayList<>();
+            List<Long> newChildren = new ArrayList<>();
+            int keySize = this.keys.size();
+            int childrenSize = this.children.size();
+            for (int i=this.metadata.getOrder()+1;i<keySize;i++){
+                newKeys.add(this.keys.get(i));
+            }
+            for (int i=childrenSize/2;i<childrenSize;i++){
+                newChildren.add(this.children.get(i));
+            }
+
+            // delete old
+            for (int i=keySize-1;i>=keySize/2;i--){
+                this.keys.remove(i);
+            }
+            for (int i=childrenSize-1;i>=childrenSize/2;i--){
+                this.children.remove(i);
+            }
+
+            InnerNode newInner = new InnerNode(this.metadata,this.bufferManager,newKeys,newChildren,this.treeContext);
+
+            Pair<DataBox, Long> newPair = new Pair<>(newD, newInner.page.getPageNum());
+            result = Optional.of(newPair);
+        }
+
+        this.sync();
+        return result;
     }
 
     // See BPlusNode.remove.
     @Override
     public void remove(DataBox key) {
-        // TODO(proj2): implement
-
+        this.get(key).remove(key);
         return;
     }
 
