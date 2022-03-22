@@ -8,9 +8,12 @@ import edu.berkeley.cs186.database.concurrency.LockUtil;
 import edu.berkeley.cs186.database.databox.DataBox;
 import edu.berkeley.cs186.database.databox.Type;
 import edu.berkeley.cs186.database.io.DiskSpaceManager;
+import edu.berkeley.cs186.database.io.PageException;
 import edu.berkeley.cs186.database.memory.BufferManager;
+import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.RecordId;
 
+import javax.xml.crypto.Data;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -145,7 +148,22 @@ public class BPlusTree {
         // TODO(proj4_integration): Update the following line
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
-        // TODO(proj2): implement
+        LeafNode node = this.root.get(key);
+        List<DataBox> keys = node.getKeys();
+        int size = keys.size();
+        int low=0, high=size-1;
+        while (low<high){
+            int mid = low + (high-low)/2;
+            if (keys.get(mid).compareTo(key)<0){
+                low=mid+1;
+            }else{
+                high=mid;
+            }
+        }
+
+        if (size > 0 && keys.get(low).equals(key)){
+            return Optional.ofNullable(node.getRids().get(low));
+        }
 
         return Optional.empty();
     }
@@ -201,9 +219,7 @@ public class BPlusTree {
         // TODO(proj4_integration): Update the following line
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
-        // TODO(proj2): Return a BPlusTreeIterator.
-
-        return Collections.emptyIterator();
+        return new BPlusTreeIterator();
     }
 
     /**
@@ -234,9 +250,8 @@ public class BPlusTree {
         // TODO(proj4_integration): Update the following line
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
-        // TODO(proj2): Return a BPlusTreeIterator.
-
-        return Collections.emptyIterator();
+        LeafNode node = this.root.get(key);
+        return new BPlusTreeIterator(node, key);
     }
 
     /**
@@ -253,10 +268,26 @@ public class BPlusTree {
         // TODO(proj4_integration): Update the following line
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
-        // TODO(proj2): implement
         // Note: You should NOT update the root variable directly.
         // Use the provided updateRoot() helper method to change
         // the tree's root if the old root splits.
+        Optional<Pair<DataBox, Long>> pair = this.root.put(key,rid);
+        if (pair.isPresent()){
+            ArrayList<DataBox> keys = new ArrayList<>();
+            ArrayList<Long> children = new ArrayList<>();
+            keys.add(pair.get().getFirst());
+            children.add(this.root.getPage().getPageNum());
+            children.add(pair.get().getSecond());
+
+            BPlusNode newNode = new InnerNode(
+                    this.metadata,
+                    this.bufferManager,
+                    keys,
+                    children,
+                    this.lockContext
+            );
+            this.updateRoot(newNode);
+        }
 
         return;
     }
@@ -282,10 +313,28 @@ public class BPlusTree {
         // TODO(proj4_integration): Update the following line
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
-        // TODO(proj2): implement
         // Note: You should NOT update the root variable directly.
         // Use the provided updateRoot() helper method to change
         // the tree's root if the old root splits.
+        while (data.hasNext()){
+            Optional<Pair<DataBox, Long>> pair = this.root.bulkLoad(data,fillFactor);
+            if (pair.isPresent()){
+                ArrayList<DataBox> keys = new ArrayList<>();
+                ArrayList<Long> children = new ArrayList<>();
+                keys.add(pair.get().getFirst());
+                children.add(this.root.getPage().getPageNum());
+                children.add(pair.get().getSecond());
+
+                BPlusNode newNode = new InnerNode(
+                        this.metadata,
+                        this.bufferManager,
+                        keys,
+                        children,
+                        this.lockContext
+                );
+                this.updateRoot(newNode);
+            }
+        }
 
         return;
     }
@@ -306,7 +355,7 @@ public class BPlusTree {
         // TODO(proj4_integration): Update the following line
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
-        // TODO(proj2): implement
+        this.root.remove(key);
 
         return;
     }
@@ -422,18 +471,60 @@ public class BPlusTree {
     private class BPlusTreeIterator implements Iterator<RecordId> {
         // TODO(proj2): Add whatever fields and constructors you want here.
 
+        LeafNode node;
+        int cursor;
+        int totalRecord;
+
+        public BPlusTreeIterator() {
+            this.node = root.getLeftmostLeaf();
+            this.cursor = 0;
+            this.totalRecord = node.getKeys().size();
+        }
+
+        public BPlusTreeIterator(LeafNode node, DataBox key) {
+            this.node = node;
+            int size = this.node.getKeys().size();
+            int low = 0, high = size;
+            while (low<high){
+                int mid = low + (high-low)/2;
+                if (this.node.getKeys().get(mid).compareTo(key) < 0){
+                    low = mid + 1;
+                }else{
+                    high = mid;
+                }
+            }
+
+            if (this.node.getKeys().get(low).equals(key)){
+                this.cursor = low;
+            }else{
+                this.cursor = low + 1;
+            }
+            this.totalRecord = size;
+        }
+
         @Override
         public boolean hasNext() {
-            // TODO(proj2): implement
-
-            return false;
+            try {
+                if (cursor >= node.getKeys().size()) {
+                    this.node = node.getRightSibling().get();
+                    this.cursor = 0;
+                    this.totalRecord = node.getKeys().size();
+                }
+                return true;
+            }catch (PageException e) {
+                return false;
+            }
         }
 
         @Override
         public RecordId next() {
-            // TODO(proj2): implement
-
-            throw new NoSuchElementException();
+            try {
+                RecordId recordId = node.getRids().get(cursor);
+                cursor++;
+                return recordId;
+            }catch (PageException e){
+                throw new NoSuchElementException();
+            }
         }
     }
 }

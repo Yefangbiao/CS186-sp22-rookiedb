@@ -87,7 +87,12 @@ public class SortOperator extends QueryOperator {
      */
     public Run sortRun(Iterator<Record> records) {
         // TODO(proj3_part1): implement
-        return null;
+        ArrayList<Record> list = new ArrayList<>();
+        while (records.hasNext()){
+            list.add(records.next());
+        }
+        list.sort(comparator);
+        return makeRun(list);
     }
 
     /**
@@ -108,7 +113,40 @@ public class SortOperator extends QueryOperator {
     public Run mergeSortedRuns(List<Run> runs) {
         assert (runs.size() <= this.numBuffers - 1);
         // TODO(proj3_part1): implement
-        return null;
+        Iterator<Record>[] iteratos = new Iterator[runs.size()];
+        for (int i = 0; i < runs.size(); i++) {
+            iteratos[i] = runs.get(i).iterator();
+        }
+
+        PriorityQueue<Pair<Record, Integer>> queue = new PriorityQueue<>(
+                new Comparator<Pair<Record, Integer>>() {
+                    @Override
+                    public int compare(Pair<Record, Integer> o1, Pair<Record, Integer> o2) {
+                        if (o1.getFirst() == null) {
+                            return -1;
+                        } else if (o2.getFirst() == null) {
+                            return 1;
+                        }
+                        return comparator.compare(o1.getFirst(),o2.getFirst());
+                    }
+                }
+        );
+        for (int i = 0; i < runs.size(); i++) {
+            queue.add(new Pair<Record, Integer>(null, i));
+        }
+
+        ArrayList<Record> result = new ArrayList<>();
+        while (queue.size()>0){
+            Pair<Record, Integer> pair = queue.poll();
+            if (pair.getFirst() != null){
+                result.add(pair.getFirst());
+            }
+            if (iteratos[pair.getSecond()].hasNext()){
+                queue.add(new Pair<>(iteratos[pair.getSecond()].next(), pair.getSecond()));
+            }
+        }
+
+        return makeRun(result);
     }
 
     /**
@@ -133,7 +171,16 @@ public class SortOperator extends QueryOperator {
      */
     public List<Run> mergePass(List<Run> runs) {
         // TODO(proj3_part1): implement
-        return Collections.emptyList();
+        int size = runs.size();
+        int available = this.numBuffers - 1;
+        int count = (int)Math.ceil(size / available);
+
+        ArrayList<Run> result = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            Run sortedRun = mergeSortedRuns(runs.subList(i*available, (i+1)*available));
+            result.add(sortedRun);
+        }
+        return result;
     }
 
     /**
@@ -149,7 +196,23 @@ public class SortOperator extends QueryOperator {
         Iterator<Record> sourceIterator = getSource().iterator();
 
         // TODO(proj3_part1): implement
-        return makeRun(); // TODO(proj3_part1): replace this!
+        ArrayList<Run> list = new ArrayList<>();
+        while (sourceIterator.hasNext()) {
+            BacktrackingIterator<Record> iterator = QueryOperator.getBlockIterator(sourceIterator, this.getSchema(), this.numBuffers);
+            Run run = sortRun(iterator);
+            list.add(run);
+        }
+
+        List<Run> runs = mergePass(list);
+        while (runs.size() > 1){
+            runs = mergePass(runs);
+        }
+
+        if (list.size() == 1) {
+            return list.get(0);
+        }else {
+            return makeRun();
+        }
     }
 
     /**
