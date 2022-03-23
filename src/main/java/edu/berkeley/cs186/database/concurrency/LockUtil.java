@@ -2,6 +2,9 @@ package edu.berkeley.cs186.database.concurrency;
 
 import edu.berkeley.cs186.database.TransactionContext;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * LockUtil is a declarative layer which simplifies multigranularity lock
  * acquisition for the user (you, in the last task of Part 2). Generally
@@ -42,8 +45,54 @@ public class LockUtil {
         LockType explicitLockType = lockContext.getExplicitLockType(transaction);
 
         // TODO(proj4_part2): implement
+        // The current lock type can effectively substitute the requested type
+        if (LockType.substitutable(effectiveLockType, requestType)) {
+            return;
+        }
+        // The current lock type is IX and the requested lock is S
+        if (explicitLockType == LockType.IX && requestType == LockType.S) {
+            lockContext.promote(transaction, LockType.SIX);
+            return;
+        }
+        // The current lock type is an intent lock
+        if (explicitLockType.isIntent()) {
+            lockContext.escalate(transaction);
+            return;
+        }
+        // None of the above: we should consider Pair<explicitLockType, requestType> [{NL,S}, {NL,X}, {S,X}]
+        enforcePromote(lockContext, requestType);
         return;
     }
 
     // TODO(proj4_part2) add any helper methods you want
+    private static void enforcePromote(LockContext lockContext, LockType requestType) {
+        TransactionContext transaction = TransactionContext.getTransaction();
+        LockType explicitLockType = lockContext.getExplicitLockType(transaction);
+
+        LockContext parentContext = lockContext.parentContext();
+        List<LockContext> parents = new ArrayList<>();
+        while (parentContext != null) {
+            LockType parentLockType = parentContext.getExplicitLockType(transaction);
+            if (LockType.canBeParentLock(parentLockType, requestType)) {
+                break;
+            }
+            parents.add(0, parentContext);
+            parentContext = parentContext.parentContext();
+        }
+
+        LockType shouldType = requestType == LockType.S ? LockType.IS : LockType.IX;
+        for (LockContext parent : parents) {
+            if (parent.getExplicitLockType(transaction) == LockType.NL) {
+                parent.acquire(transaction, shouldType);
+            } else {
+                parent.promote(transaction, shouldType);
+            }
+        }
+
+        if (explicitLockType == LockType.NL) {
+            lockContext.acquire(transaction, requestType);
+        } else {
+            lockContext.promote(transaction, requestType);
+        }
+    }
 }

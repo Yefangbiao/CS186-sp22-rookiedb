@@ -931,6 +931,28 @@ public class Database implements AutoCloseable {
         public void close() {
             try {
                 // TODO(proj4_part2)
+                TransactionContext transaction = TransactionContext.getTransaction();
+                List<Lock> locks = lockManager.getLocks(transaction);
+                Queue<LockContext> queue = new PriorityQueue<>(new Comparator<LockContext>() {
+                    @Override
+                    public int compare(LockContext o1, LockContext o2) {
+                        if (o1.getNumChildren(transaction) < o2.getNumChildren(transaction)) {
+                            return -1;
+                        }
+                        if (o1.getNumChildren(transaction) > o2.getNumChildren(transaction)) {
+                            return 1;
+                        }
+                        return 0;
+                    }
+                });
+
+                for (Lock lock : locks) {
+                    queue.add(LockContext.fromResourceName(lockManager, lock.name));
+                }
+
+                while (queue.size() > 0) {
+                    queue.poll().release(this);
+                }
                 return;
             } catch (Exception e) {
                 // There's a chance an error message from your release phase

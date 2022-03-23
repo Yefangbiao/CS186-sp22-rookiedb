@@ -11,6 +11,18 @@ public enum LockType {
     SIX, // shared intention exclusive
     NL;  // no lock held
 
+    private int getMatrixIndex() {
+        switch (this) {
+            case NL: return 0;
+            case IS: return 1;
+            case IX: return 2;
+            case S: return 3;
+            case SIX: return 4;
+            case X: return 5;
+            default: throw new UnsupportedOperationException("bad lock type");
+        }
+    }
+
     /**
      * This method checks whether lock types A and B are compatible with
      * each other. If a transaction can hold lock type A on a resource
@@ -22,8 +34,16 @@ public enum LockType {
             throw new NullPointerException("null lock type");
         }
         // TODO(proj4_part1): implement
+        boolean [][] compatibleMatrix = new boolean[][]{
+                {true, true, true, true, true, true},
+                {true, true, true, true, true, false},
+                {true, true, true, false, false, false},
+                {true, true, false, true, false, false},
+                {true, true, false, false, false, false},
+                {true, false, false, false, false, false},
+        };
 
-        return false;
+        return compatibleMatrix[(a.getMatrixIndex())][b.getMatrixIndex()];
     }
 
     /**
@@ -54,8 +74,16 @@ public enum LockType {
             throw new NullPointerException("null lock type");
         }
         // TODO(proj4_part1): implement
+        boolean [][] parentMatrix = new boolean[][]{
+                {true, false, false, false, false, false},
+                {true, true, false, true, false, false},
+                {true, true, true, true, true, true},
+                {true, false, false, false, false, false},
+                {true, false, true, false, true, true},
+                {true, false, false, false, false, false},
+        };
 
-        return false;
+        return parentMatrix[parentLockType.getMatrixIndex()][childLockType.getMatrixIndex()];
     }
 
     /**
@@ -69,8 +97,16 @@ public enum LockType {
             throw new NullPointerException("null lock type");
         }
         // TODO(proj4_part1): implement
+        boolean [][] substitutabilityMatrix = new boolean[][]{
+                {true, false, false, false, false, false},
+                {true, true, false, false, false, false},
+                {true, true, true, false, false, false},
+                {true, true, false, true, false, false},
+                {true, true, true, true, true, false},
+                {true, true, true, true, true, true},
+        };
 
-        return false;
+        return substitutabilityMatrix[substitute.getMatrixIndex()][required.getMatrixIndex()];
     }
 
     /**
