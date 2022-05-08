@@ -1,27 +1,25 @@
-# vim files
-.*~
-.*.s??
-
-# Ignore all maven build and test files
-target/*
+# Compiled class file
 *.class
 
-# Eclipse
-.classpath
-.project
-.settings/
+# Log file
+*.log
 
-# Ignore all IntelliJ IDEA files
-.idea/*
-*.iml
-*.iws
-.attach_*
+# BlueJ files
+*.ctxt
 
-# Ignore all OSX hidden files
-*.DS_Store
-/bin/
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
 
-# ignore submission files
-hw*.zip
+# Package Files #
+*.jar
+*.war
+*.nar
+*.ear
 *.zip
-demo/*
+*.tar.gz
+*.rar
+
+# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+hs_err_pid*
+
+.idea
