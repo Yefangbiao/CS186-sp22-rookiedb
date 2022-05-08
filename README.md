@@ -1,6 +1,6 @@
 # CS186-study
 
-[中文版](https://github.com/Yefangbiao/CS186-sp22-rookiedb/chinese.md)
+[中文版](https://github.com/Yefangbiao/CS186-sp22-rookiedb/blob/master/chinese.md)
 
 ---
 
